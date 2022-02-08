@@ -84,8 +84,8 @@ def main():
             if pair_address not in initial_report_dict:
                 initial_report_dict[pair_address] = pool_info["total_value"]
                 logging.info('symbol: %s. %s: %s. %s: %s. value: %s.' % (
-                    pool_info["symbol"], pool_info["token0_name"], round(pool_info["token0_amount"], 5),
-                    pool_info["token1_name"], round(pool_info["token1_amount"], 5), round(pool_info["total_value"], 5)))
+                    pool_info["symbol"], pool_info["token0_name"], dround(pool_info["token0_amount"], 5),
+                    pool_info["token1_name"], dround(pool_info["token1_amount"], 5), dround(pool_info["total_value"], 5)))
             if pair_address not in percent_changed_dict:
                 percent_changed_dict[pair_address] = pool_info["total_value"]
             if pair_address not in percent_remove_dict:
@@ -131,7 +131,7 @@ def main():
         
         if report_total is True:
             previous_total_value = current_pool_value
-            logging.info("Total (in %s): %s" % (value_token_name, round(current_pool_value, 7)))
+            logging.info("Total (in %s): %s" % (value_token_name, str(current_pool_value)))
             
         for remove in remove_pools:
             try:
@@ -152,6 +152,9 @@ def is_percent_up(previous_amount, current_amount, percent_up):
         return True
     else:
         return False
+    
+def dround(decimal_number, decimal_places):
+    return decimal_number.quantize(Decimal(10) ** -decimal_places)
     
 def get_pair_info(client, pair_address, value_token):
     pool_info = None

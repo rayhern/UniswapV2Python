@@ -1,5 +1,5 @@
 from web3 import Web3
-from decimal import Decimal
+from decimal import Decimal, getcontext
 import traceback
 import time
 import logging
@@ -438,26 +438,25 @@ class UniswapV2():
             logging.info(traceback.format_exc())
             return None
         
-        token0_pool_amount = pair_balance / (total_supply / reserves[0])
-        token1_pool_amount = pair_balance / (total_supply / reserves[1])
+        token0_pool_amount = Decimal(pair_balance / (total_supply / reserves[0]))
+        token1_pool_amount = Decimal(pair_balance / (total_supply / reserves[1]))
+
+        if str(token0) != value_token:
+            token0_value = Web3.fromWei(self._get_amounts_out(1, [token0, value_token])[1], "ether") * Decimal(token0_pool_amount)
+        else:
+            token0_value = Decimal(token0_pool_amount)
+        
+        if str(token1) != value_token:
+            token1_value = Web3.fromWei(self._get_amounts_out(Web3.toWei(token1_pool_amount), [token1, value_token])[1], "ether") * Decimal(token1_pool_amount)
+        else:
+            token1_value = Web3.fromWei(token1_pool_amount, "ether")
+        
+        total_value = Decimal(0.0)
+        total_value += token0_value
+        total_value += token1_value
+        
         token1_pool_amount = Web3.fromWei(token1_pool_amount, "ether")
-        
-        if token0 != value_token:
-            single_token0_value = Web3.fromWei(
-                self._get_amounts_out(1, [token0, value_token])[1], "ether")
-            token0_value = Decimal(single_token0_value) * Decimal(token0_pool_amount)
-        else:
-            token0_value = token0_pool_amount
-        
-        if token1 != value_token:
-            single_token1_value = Web3.fromWei(
-                self._get_amounts_out(1, [token1, value_token])[1], "ether")
-            token1_value = Decimal(single_token1_value) * Decimal(token1_pool_amount)
-        else:
-            token1_value = token1_pool_amount
-            
-        total_value = token0_value + token1_value
-        
+
         return {
             "reserves": reserves,
             "token0": token0,
