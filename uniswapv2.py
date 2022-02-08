@@ -27,6 +27,10 @@ def read_json_file(filepath):
         results = None
     return results
 
+def dround(decimal_number, decimal_places):
+    return decimal_number.quantize(Decimal(10) ** -decimal_places)
+    
+
 class UniswapV2():
     def __init__(
         self, private_key, txn_timeout=60, gas_price_gwei=30, rpc_host="https://api.harmony.one/", slippage=10,
@@ -441,13 +445,13 @@ class UniswapV2():
         token0_pool_amount = Decimal(pair_balance / (total_supply / reserves[0]))
         token1_pool_amount = Decimal(pair_balance / (total_supply / reserves[1]))
 
-        if str(token0) != value_token:
-            token0_value = Web3.fromWei(self._get_amounts_out(1, [token0, value_token])[1], "ether") * Decimal(token0_pool_amount)
+        if str(token0) != str(value_token):
+            token0_value = Web3.fromWei(self._get_amounts_out(Web3.toWei(Web3.fromWei(token0_pool_amount, "ether"), "ether"), [token0, value_token])[1], "ether")
         else:
             token0_value = Web3.fromWei(token0_pool_amount, "ether")
         
-        if str(token1) != value_token:
-            token1_value = Web3.fromWei(self._get_amounts_out(1, [token1, value_token])[1], "ether") * Decimal(token1_pool_amount)
+        if str(token1) != str(value_token):
+            token1_value = Web3.fromWei(self._get_amounts_out(Web3.toWei(Web3.fromWei(token1_pool_amount, "ether"), "ether"), [token1, value_token])[1], "ether")
         else:
             token1_value = Web3.fromWei(token1_pool_amount, "ether")
         
@@ -456,6 +460,7 @@ class UniswapV2():
         total_value += token1_value
         
         token1_pool_amount = Web3.fromWei(token1_pool_amount, "ether")
+        # token0_pool_amount = Web3.fromWei(token0_pool_amount, "ether")
 
         return {
             "reserves": reserves,

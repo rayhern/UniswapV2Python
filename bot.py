@@ -131,7 +131,7 @@ def main():
         
         if report_total is True:
             previous_total_value = current_pool_value
-            logging.info("Total (in %s): %s" % (value_token_name, str(current_pool_value)))
+            logging.info("Total (in %s): %s" % (value_token_name, str(dround(current_pool_value, 8))))
             
         for remove in remove_pools:
             try:
