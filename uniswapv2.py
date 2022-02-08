@@ -450,7 +450,7 @@ class UniswapV2():
         if str(token0) != str(value_token):
             token0_value = Web3.fromWei(self._get_amounts_out(1, [token0, value_token])[1], "ether") * token0_pool_amount
         else:
-            token0_value = token0_pool_amount
+            token0_value = Web3.fromWei(token0_pool_amount, "ether")
         
         if str(token1) != str(value_token):
             token1_value = Web3.fromWei(self._get_amounts_out(1, [token1, value_token])[1], "ether") * token1_pool_amount
