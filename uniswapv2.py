@@ -449,17 +449,15 @@ class UniswapV2():
             token1_pool_amount = Web3.fromWei(token1_pool_amount, "ether")
             token0_value = Web3.fromWei(self._get_amounts_out(1, [token0, value_token])[1], "ether") * token0_pool_amount
         else:
+            token0_pool_amount = Web3.fromWei(token0_pool_amount, "ether")
             token0_value = token0_pool_amount
         
         if str(token1) != str(value_token):
-            token0_pool_amount = Web3.fromWei(token0_pool_amount, "ether")
             token1_value = Web3.fromWei(self._get_amounts_out(1, [token1, value_token])[1], "ether") * token1_pool_amount
         else:
             token1_value = token1_pool_amount
         
-        total_value = Decimal(0.0)
-        total_value += token0_value
-        total_value += token1_value
+        total_value = token1_value + token0_value
         
         return {
             "reserves": reserves,
