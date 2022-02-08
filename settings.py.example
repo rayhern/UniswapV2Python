@@ -1,0 +1,17 @@
+# your account.
+PRIVATE_KEY = ""
+
+# the token to be used when determining value of all pools.
+VALUE_TOKEN = "0x72Cb10C6bfA5624dD07Ef608027E366bd690048F"
+
+# how often to check all liquidity pools.
+CHECK_MINUTE_DELAY = 1
+
+# the percent to be down before removing liquidity.
+PERCENT_DOWN_REMOVE_LIQUIDITY = 5
+
+# the percent to be down, or up before reporting to the log.
+PERCENT_REPORT_CHANGE = 1
+
+# How many times to attempt an action before failing.
+RPC_ATTEMPTS = 5
