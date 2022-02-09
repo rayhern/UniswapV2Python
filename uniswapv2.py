@@ -232,7 +232,24 @@ class UniswapV2():
             tx_receipt = {"status": 0}
         return False
     
+    def get_price_for_amount(self, amount, token, value_token=None):
+        if value_token is None:
+            value_token = self._weth()
+        _, token_price = self._get_amounts_out(amount, [to_checksum(token), to_checksum(value_token)])
+        return self._fix_decimal(token_price)
+        
     ### PRIVATE METHODS ###
+    
+    def _weth(self):
+        return self.router_contract.functions.WETH().call()
+    
+    def _fix_decimal(self, amount, token_address=None, decimals=None):
+        if decimals is not None:
+            return amount / (10 ** decimals)
+        elif token_address is not None:
+            return amount / (10 ** self._get_decimals(token_address))
+        else:
+            raise Exception("token address, or decimal count must be supplied to _fix_decimal().")
     
     def _link(self, txid):
         return '%s%s' % (self.block_explorer_prefix, str(txid))
@@ -415,16 +432,18 @@ class UniswapV2():
             token1 = pair_contract.functions.token1().call()
             token0_contract = self._get_token_contract(token0)
             token1_contract = self._get_token_contract(token1)
+            token0_decimals = token0_contract.functions.decimals().call()
+            token1_decimals = token1_contract.functions.decimals().call()
             token0_name = token0_contract.functions.symbol().call()
             token1_name = token1_contract.functions.symbol().call()
         except:
             logging.debug(traceback.format_exc())
             return None
         
-        if is_number_wei(reserves[1]) is True:
-            reserves[1] = Web3.fromWei(reserves[1], "ether")
-        if is_number_wei(reserves[0]) is True:
-            reserves[0] = Web3.fromWei(reserves[0], "ether")
+        # fix the decimals to the correct places.
+        # DO NOT USE fromWei()!
+        reserves[0] = self._fix_decimal(reserves[0], decimals=token0_decimals)
+        reserves[1] = self._fix_decimal(reserves[1], decimals=token1_decimals)
         
         total_supply = Web3.fromWei(total_supply, "ether")
         pair_balance = Web3.fromWei(pair_balance, "ether")
