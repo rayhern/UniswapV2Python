@@ -27,7 +27,7 @@ def read_json_file(filepath):
         results = None
     return results
 
-def dround(decimal_number, decimal_places):
+def decimal_round(decimal_number, decimal_places):
     return decimal_number.quantize(Decimal(10) ** -decimal_places)
 
 def is_number_wei(number):
@@ -39,7 +39,23 @@ def is_number_wei(number):
         _ = int(number)
     except:
         return False
+    try:
+        _ = Web3.fromWei(number, "ether")
+    except:
+        return False
     return True
+
+def is_percent_down(previous_amount, current_amount, percent_down):
+    if previous_amount - current_amount > Decimal(previous_amount) * (Decimal(percent_down) / Decimal(100)):
+        return True
+    else:
+        return False
+    
+def is_percent_up(previous_amount, current_amount, percent_up):
+    if current_amount - previous_amount > Decimal(previous_amount) * (Decimal(percent_up) / Decimal(100)):
+        return True
+    else:
+        return False
 
 class UniswapV2():
     def __init__(

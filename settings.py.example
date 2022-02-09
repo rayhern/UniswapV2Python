@@ -11,7 +11,10 @@ CHECK_MINUTE_DELAY = 1
 PERCENT_DOWN_REMOVE_LIQUIDITY = 5
 
 # the percent to be down, or up before reporting to the log.
-PERCENT_REPORT_CHANGE = 1
+PERCENT_REPORT_CHANGE = 3
 
 # How many times to attempt an action before failing.
 RPC_ATTEMPTS = 5
+
+# How often to report the value on all of the pools.
+REPORT_ALL_POOLS_EVERY_MINS = 60

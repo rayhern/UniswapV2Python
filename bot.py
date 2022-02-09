@@ -1,4 +1,4 @@
-from uniswapv2 import UniswapV2
+from uniswapv2 import UniswapV2, decimal_round, is_percent_down, is_percent_up
 from decimal import Decimal
 import logging
 import traceback
@@ -25,24 +25,10 @@ def main():
     log_format = '%(asctime)s: %(message)s'
     logging.basicConfig(level=logging.INFO, format=log_format, stream=sys.stdout)
     logging.info('Uniswap Liquidity Watcher v%s Started!' % VERSION)
-
-    # create my spiffy new uniswap class. works for all networks and forks.
-    uniswap = UniswapV2(
-        PRIVATE_KEY, 
-        txn_timeout=60, 
-        gas_price_gwei=30, 
-        rpc_host="https://api.harmony.one/", 
-        router_address="0x24ad62502d1C652Cc7684081169D04896aC20f30",
-        factory_address="0x9014B937069918bd319f80e8B3BB4A2cf6FAA5F7",
-        block_explorer_prefix="https://explorer.harmony.one/tx/"
-    )
     
     # token address to use when determining total value of pool
     # currently this is set to jewel.
     value_token = VALUE_TOKEN
-    
-    value_token_name = uniswap._get_symbol(value_token)
-    logging.info("Interval: %s. Currency: %s." % (CHECK_MINUTE_DELAY, value_token_name))
     
     # how much percent to be down before pulling all liquidity
     percent_down_remove_liquidity = PERCENT_DOWN_REMOVE_LIQUIDITY
@@ -53,22 +39,45 @@ def main():
     # loads pools from a csv file, so we dont have to search all liquidity pools
     # every start.
     pools_dict = load_pools_file("pools.csv")
-
-    if len(pools_dict) == 0:
-        # Get all LP pairs that account is providing liquidity on.
-        logging.info('No pools found. Searching for liquidity pools...')
-        liquidity_pools = uniswap._get_deposited_pairs()
-        for address in liquidity_pools:
-            pools_dict[address] = 0.0
-        logging.info('Found %s pools!' % len(pools_dict))
             
     previous_worth_dict = {}
     percent_changed_dict = {}
     percent_remove_dict = {}
     initial_report_dict = {}
     previous_total_value = None
-
+    value_token_name = None
+    start_time = time.time()
+    initial_report_time = time.time()
     while True:
+        
+        # Do not reset the timer until the end of the loop.
+        if time.time() - initial_report_time > (REPORT_ALL_POOLS_EVERY_MINS * 60):
+            initial_report_dict = {}
+        
+        # create my spiffy new uniswap class. works for all networks and forks.
+        # Added uniswap object initialization every loop incase connection is lost or something.
+        uniswap = UniswapV2(
+            PRIVATE_KEY, 
+            txn_timeout=60, 
+            gas_price_gwei=30, 
+            rpc_host="https://api.harmony.one/", 
+            router_address="0x24ad62502d1C652Cc7684081169D04896aC20f30",
+            factory_address="0x9014B937069918bd319f80e8B3BB4A2cf6FAA5F7",
+            block_explorer_prefix="https://explorer.harmony.one/tx/"
+        )
+        
+        if not value_token_name:
+            value_token_name = uniswap._get_symbol(value_token)
+            logging.info("Interval: %s. Currency: %s." % (CHECK_MINUTE_DELAY, value_token_name))
+            
+        if len(pools_dict) == 0:
+            # Get all LP pairs that account is providing liquidity on.
+            logging.info('No pools found. Searching for liquidity pools...')
+            liquidity_pools = uniswap._get_deposited_pairs()
+            for address in liquidity_pools:
+                pools_dict[address] = 0.0
+            logging.info('Found %s pools!' % len(pools_dict))
+        
         save_pools_file(pools_dict, "pools.csv")
         current_pool_value = Decimal(0.0)
         remove_pools = []
@@ -84,8 +93,8 @@ def main():
             if pair_address not in initial_report_dict:
                 initial_report_dict[pair_address] = pool_info["total_value"]
                 logging.info('symbol: %s. %s: %s. %s: %s. value: %s.' % (
-                    pool_info["symbol"], pool_info["token0_name"], dround(pool_info["token0_amount"], 5),
-                    pool_info["token1_name"], dround(pool_info["token1_amount"], 5), dround(pool_info["total_value"], 5)))
+                    pool_info["symbol"], pool_info["token0_name"], decimal_round(pool_info["token0_amount"], 5),
+                    pool_info["token1_name"], decimal_round(pool_info["token1_amount"], 5), decimal_round(pool_info["total_value"], 5)))
             if pair_address not in percent_changed_dict:
                 percent_changed_dict[pair_address] = pool_info["total_value"]
             if pair_address not in percent_remove_dict:
@@ -96,12 +105,12 @@ def main():
             if pair_address in previous_worth_dict:
                 if pool_info["total_value"] > previous_worth_dict[pair_address]:
                     if is_percent_up(percent_changed_dict[pair_address], pool_info["total_value"], percent_report_change) is True:
-                        logging.info('%s is UP to %s from %s!' % (
+                        logging.info('%s is ⬆ to %s from %s!' % (
                             pool_info["symbol"], round(pool_info["total_value"], 7), round(previous_worth_dict[pair_address], 7)))
                         percent_changed_dict[pair_address] = pool_info["total_value"]
                 elif pool_info["total_value"] < previous_worth_dict[pair_address]:
                     if is_percent_down(percent_changed_dict[pair_address], pool_info["total_value"], percent_report_change) is True:
-                        logging.info('%s is DOWN to %s from %s!' % (
+                        logging.info('%s is ⬇ to %s from %s!' % (
                             pool_info["symbol"], round(pool_info["total_value"], 7), round(previous_worth_dict[pair_address], 7)))
                         percent_changed_dict[pair_address] = pool_info["total_value"]
                     if is_percent_down(percent_remove_dict[pair_address], pool_info["total_value"], percent_down_remove_liquidity) is True:
@@ -129,9 +138,14 @@ def main():
         else:
             report_total = False
         
+        # Reset counter for reporting the pool total values.
+        if time.time() - initial_report_time > (REPORT_ALL_POOLS_EVERY_MINS * 60):
+            initial_report_dict = time.time()
+            report_total = True
+        
         if report_total is True:
             previous_total_value = current_pool_value
-            logging.info("Total (in %s): %s" % (value_token_name, str(dround(current_pool_value, 8))))
+            logging.info("Total (in %s): %s" % (value_token_name, str(decimal_round(current_pool_value, 8))))
             
         for remove in remove_pools:
             try:
@@ -139,22 +153,8 @@ def main():
             except:
                 logging.info(traceback.format_exc())
         
+        uniswap = None
         time.sleep(CHECK_MINUTE_DELAY * 60)
-
-def is_percent_down(previous_amount, current_amount, percent_down):
-    if previous_amount - current_amount > Decimal(previous_amount) * (Decimal(percent_down) / Decimal(100)):
-        return True
-    else:
-        return False
-    
-def is_percent_up(previous_amount, current_amount, percent_up):
-    if current_amount - previous_amount > Decimal(previous_amount) * (Decimal(percent_up) / Decimal(100)):
-        return True
-    else:
-        return False
-    
-def dround(decimal_number, decimal_places):
-    return decimal_number.quantize(Decimal(10) ** -decimal_places)
     
 def get_pair_info(client, pair_address, value_token):
     pool_info = None
