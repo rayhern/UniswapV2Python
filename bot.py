@@ -1,4 +1,5 @@
-from uniswapv2 import UniswapV2, decimal_round, is_percent_down, is_percent_up
+from uniswapv2 import UniswapV2
+from utils import  decimal_round, is_percent_down, is_percent_up
 from decimal import Decimal
 import logging
 import traceback
