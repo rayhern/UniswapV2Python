@@ -33,6 +33,8 @@ def main():
     # how much percent to be down before pulling all liquidity
     percent_down_remove_liquidity = PERCENT_DOWN_REMOVE_LIQUIDITY
     
+    percent_up_remove_liquidity = PERCENT_UP_REMOVE_LIQUIDITY
+    
     # how much percent to be down before reporting in the log.
     percent_report_change = PERCENT_REPORT_CHANGE
 
@@ -103,11 +105,24 @@ def main():
             # Check the percent change of the total value of pool using the tracking dicts above.
             # on X% down this will remove all liquidity from target pair. (see options)
             if pair_address in previous_worth_dict:
-                if pool_info["total_value"] > previous_worth_dict[pair_address]:
+                if pool_info["total_value"] > percent_changed_dict[pair_address]:
                     if is_percent_up(percent_changed_dict[pair_address], pool_info["total_value"], percent_report_change) is True:
                         logging.info('%s is ⬆ to %s from %s!' % (
                             pool_info["symbol"], round(pool_info["total_value"], 7), round(previous_worth_dict[pair_address], 7)))
                         percent_changed_dict[pair_address] = pool_info["total_value"]
+                    if is_percent_up(percent_remove_dict[pair_address], pool_info["total_value"], percent_up_remove_liquidity) is True:
+                        logging.info('WARNING: %s is UP UP UP %s percent since bot started.' % (
+                            pool_info["symbol"], percent_down_remove_liquidity))
+                        logging.info('Removing liquidity from pair $$$: %s...' % pool_info["symbol"])
+                        # set the start dicts total value, so it doesnt report on loop
+                        percent_remove_dict[pair_address] = pool_info["total_value"]
+                        # remove all liquidity from pair address.
+                        # TODO put this back!
+                        # remove_result = uniswap.remove_all_liquidity(pair_address)
+                        # while remove_result is False:
+                        #     remove_result = uniswap.remove_all_liquidity(pair_address)
+                        # add to remove list, so that pair is removed from processing.
+                        remove_pools.append(pair_address)
                 elif pool_info["total_value"] < previous_worth_dict[pair_address]:
                     if is_percent_down(percent_changed_dict[pair_address], pool_info["total_value"], percent_report_change) is True:
                         logging.info('%s is ⬇ to %s from %s!' % (
@@ -151,7 +166,7 @@ def main():
             try:
                 del pools_dict[remove]
             except:
-                logging.info(traceback.format_exc())
+                logging.debug(traceback.format_exc())
         
         uniswap = None
         time.sleep(CHECK_MINUTE_DELAY * 60)
@@ -178,7 +193,7 @@ def load_pools_file(filename):
                     address, value = t_line.split(',')
                     pools_dict[address] = value
         except:
-            logging.info(traceback.format_exc())
+            logging.debug(traceback.format_exc())
     return pools_dict
         
 def save_pools_file(pool_dict, filename):
@@ -187,7 +202,7 @@ def save_pools_file(pool_dict, filename):
             for address in pool_dict:
                 fp.write("%s,%s\n" % (address, pool_dict[address]))
     except:
-        logging.info(traceback.format_exc())
+        logging.debug(traceback.format_exc())
         
 
 if __name__ == "__main__":

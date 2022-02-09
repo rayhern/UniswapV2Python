@@ -10,6 +10,9 @@ CHECK_MINUTE_DELAY = 1
 # the percent to be down before removing liquidity.
 PERCENT_DOWN_REMOVE_LIQUIDITY = 5
 
+# the percent to be up before removing liquidity.
+PERCENT_UP_REMOVE_LIQUIDITY = 5
+
 # the percent to be down, or up before reporting to the log.
 PERCENT_REPORT_CHANGE = 3
 

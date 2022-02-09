@@ -156,7 +156,7 @@ class UniswapV2():
                     account_address, int(time.time() + 60), 30)
             except:
                 result = {"status": 0}
-                logging.info("EXCEPTION: %s" % traceback.format_exc())
+                logging.debug("EXCEPTION: %s" % traceback.format_exc())
             if result["status"] == 1:
                 logging.info('Successfully swapped!')
                 return True
@@ -243,7 +243,7 @@ class UniswapV2():
             results = self._add_liquidity(
                 tokenA, tokenB, amountA, amountB, amountA_min, amountB_min, deadline, txn_timeout)
         except:
-            logging.info(traceback.format_exc())
+            logging.debug(traceback.format_exc())
             results = None
             
         if results["status"] == 1:
@@ -275,7 +275,7 @@ class UniswapV2():
             if tx_receipt and "status" in tx_receipt and tx_receipt["status"] == 1:
                 return True
         except:
-            logging.info(traceback.format_exc())
+            logging.debug(traceback.format_exc())
             tx_receipt = {"status": 0}
         return False
     
@@ -309,7 +309,7 @@ class UniswapV2():
             if tx_receipt and "status" in tx_receipt and tx_receipt["status"] == 1:
                 logging.info("Transaction confirmed !")
         except:
-            logging.info(traceback.format_exc())
+            logging.debug(traceback.format_exc())
             tx_receipt = {"status": 0}
         return tx_receipt
 
@@ -333,7 +333,7 @@ class UniswapV2():
             if tx_receipt and "status" in tx_receipt and tx_receipt["status"] == 1:
                 logging.info("Transaction confirmed !")
         except:
-            logging.info(traceback.format_exc())
+            logging.debug(traceback.format_exc())
             tx_receipt = {"status": 0}
         return tx_receipt
 
@@ -465,7 +465,7 @@ class UniswapV2():
             token0_name = token0_contract.functions.symbol().call()
             token1_name = token1_contract.functions.symbol().call()
         except:
-            logging.info(traceback.format_exc())
+            logging.debug(traceback.format_exc())
             return None
         
         if is_number_wei(reserves[1]) is True:
