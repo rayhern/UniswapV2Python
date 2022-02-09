@@ -29,7 +29,17 @@ def read_json_file(filepath):
 
 def dround(decimal_number, decimal_places):
     return decimal_number.quantize(Decimal(10) ** -decimal_places)
-    
+
+def is_number_wei(number):
+    if len(str(number)) < 12:
+        return False
+    if "." in str(number):
+        return False
+    try:
+        _ = int(number)
+    except:
+        return False
+    return True
 
 class UniswapV2():
     def __init__(
@@ -240,7 +250,7 @@ class UniswapV2():
         reserves = pair_contract.functions.getReserves().call()
         total_supply = pair_contract.functions.totalSupply().call()
         amountA = liquidity / (total_supply / reserves[0])
-        # amountB = liquidity / (total_supply / reserves[1])
+        # get the minimum value accepted for the removal of liquidity.
         _, amountA_min = self._get_amounts_in(amountA, [tokenB, tokenA])
         _, amountB_min = self._get_amounts_out(amountA, [tokenA, tokenB])
         try:
@@ -442,14 +452,30 @@ class UniswapV2():
             logging.info(traceback.format_exc())
             return None
         
-        token0_pool_amount = Decimal(pair_balance / (total_supply / reserves[0]))
-        token1_pool_amount = Decimal(pair_balance / (total_supply / reserves[1]))
-
+        if is_number_wei(reserves[1]) is True:
+            reserves[1] = Web3.fromWei(reserves[1], "ether")
+        if is_number_wei(reserves[0]) is True:
+            reserves[0] = Web3.fromWei(reserves[0], "ether")
+        
+        total_supply = Web3.fromWei(total_supply, "ether")
+        pair_balance = Web3.fromWei(pair_balance, "ether")
+        
+        # Find the amount for both sides of the pair.
+        token0_pool_amount = Decimal(pair_balance) / (Decimal(total_supply) / Decimal(reserves[0]))
+        token1_pool_amount = Decimal(pair_balance) / (Decimal(total_supply) / Decimal(reserves[1]))
+        
+        logging.debug('reserves: %s' % reserves)
+        logging.debug('total supply: %s' % total_supply)
+        logging.debug('pair_balance: %s.' % pair_balance)
+        logging.debug('amount0: %s' % token0_pool_amount)
+        logging.debug('amount1: %s' % token1_pool_amount)
+        
         if str(token0) != str(value_token):
-            token1_pool_amount = Web3.fromWei(token1_pool_amount, "ether")
+            # remove these if code works.
+            # token1_pool_amount = Web3.fromWei(token1_pool_amount, "ether")
             token0_value = Web3.fromWei(self._get_amounts_out(1, [token0, value_token])[1], "ether") * token0_pool_amount
         else:
-            token0_pool_amount = Web3.fromWei(token0_pool_amount, "ether")
+            # token0_pool_amount = Web3.fromWei(token0_pool_amount, "ether")
             token0_value = token0_pool_amount
         
         if str(token1) != str(value_token):
