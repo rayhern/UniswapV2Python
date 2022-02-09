@@ -60,12 +60,12 @@ def main():
         # Added uniswap object initialization every loop incase connection is lost or something.
         uniswap = UniswapV2(
             PRIVATE_KEY, 
-            txn_timeout=60, 
-            gas_price_gwei=30, 
-            rpc_host="https://api.harmony.one/", 
-            router_address="0x24ad62502d1C652Cc7684081169D04896aC20f30",
-            factory_address="0x9014B937069918bd319f80e8B3BB4A2cf6FAA5F7",
-            block_explorer_prefix="https://explorer.harmony.one/tx/"
+            txn_timeout=TXN_TIMEOUT, 
+            gas_price_gwei=GAS_PRICE_IN_WEI, 
+            rpc_host=RPC_HOST, 
+            router_address=ROUTER_ADDRESS,
+            factory_address=FACTORY_ADDRESS,
+            block_explorer_prefix=BLOCK_EXPLORER_PREFIX
         )
         
         if not value_token_name:

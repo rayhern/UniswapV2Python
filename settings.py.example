@@ -1,11 +1,29 @@
+# The RPC to connect to.
+RPC_HOST = "https://api.harmony.one/"
+
 # your account.
 PRIVATE_KEY = ""
+
+# UniswapV2Router contract address.
+ROUTER_ADDRESS = "0x24ad62502d1C652Cc7684081169D04896aC20f30"
+
+# UniswapV2Factory contract address.
+FACTORY_ADDRESS = "0x9014B937069918bd319f80e8B3BB4A2cf6FAA5F7"
+
+# The gas price to use for transactions.
+GAS_PRICE_IN_WEI = 30
+
+# The timeout to give in seconds for transactions to confirm.
+TXN_TIMEOUT = 120
+
+# prefix of url that links to block explorer.
+BLOCK_EXPLORER_PREFIX = "https://explorer.harmony.one/tx/"
 
 # the token to be used when determining value of all pools.
 VALUE_TOKEN = "0x72Cb10C6bfA5624dD07Ef608027E366bd690048F"
 
 # how often to check all liquidity pools.
-CHECK_MINUTE_DELAY = 1
+CHECK_MINUTE_DELAY = 5
 
 # the percent to be down before removing liquidity.
 PERCENT_DOWN_REMOVE_LIQUIDITY = 5
