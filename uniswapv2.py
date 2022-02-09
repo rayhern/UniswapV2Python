@@ -236,7 +236,7 @@ class UniswapV2():
         if value_token is None:
             value_token = self._weth()
         _, token_price = self._get_amounts_out(amount, [to_checksum(token), to_checksum(value_token)])
-        return self._fix_decimal(token_price)
+        return self._fix_decimal(token_price, token_address=value_token)
         
     ### PRIVATE METHODS ###
     

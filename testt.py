@@ -23,10 +23,12 @@ def main():
         factory_address=FACTORY_ADDRESS,
         block_explorer_prefix=BLOCK_EXPLORER_PREFIX
     )
+    
     price = uniswap.get_price_for_amount(
         eth2wei(1), 
         "0x72Cb10C6bfA5624dD07Ef608027E366bd690048F",
     )
     logging.info(price)
+
 if __name__ == "__main__":
     main()
