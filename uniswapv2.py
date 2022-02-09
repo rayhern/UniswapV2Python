@@ -1,6 +1,6 @@
 from web3 import Web3
 from decimal import Decimal, getcontext
-from utils import wei2eth, eth2wei, to_checksum, read_json_file, is_number_wei
+from utils import wei2eth, eth2wei, to_checksum, read_json_file
 import traceback
 import time
 import logging

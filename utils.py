@@ -24,21 +24,6 @@ def read_json_file(filepath):
 def decimal_round(decimal_number, decimal_places):
     return decimal_number.quantize(Decimal(10) ** -decimal_places)
 
-def is_number_wei(number):
-    if len(str(number)) < 12:
-        return False
-    if "." in str(number):
-        return False
-    try:
-        _ = int(number)
-    except:
-        return False
-    try:
-        _ = Web3.fromWei(number, "ether")
-    except:
-        return False
-    return True
-
 def is_percent_down(previous_amount, current_amount, percent_down):
     if previous_amount - current_amount > Decimal(previous_amount) * (Decimal(percent_down) / Decimal(100)):
         return True
