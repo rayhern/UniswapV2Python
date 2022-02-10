@@ -222,8 +222,8 @@ class UniswapV2():
         reserves[0] = self._fix_decimal(reserves[0], token_address=tokenB)
         amountA = Decimal(liquidity) / (Decimal(total_supply) / Decimal(reserves[0]))
         # get the minimum value accepted for the removal of liquidity.
-        _, amountA_min = self._get_amounts_in(amountA, [tokenB, tokenA])
-        _, amountB_min = self._get_amounts_out(amountA, [tokenA, tokenB])
+        _, amountA_min = self._get_amounts_in(eth2wei(amountA), [tokenB, tokenA])
+        _, amountB_min = self._get_amounts_out(eth2wei(amountA), [tokenA, tokenB])
         logging.info('amountA_min: %s' % amountA_min)
         logging.info('amountB_min: %s' % amountB_min)
         tx_receipt = self._remove_liquidity(
