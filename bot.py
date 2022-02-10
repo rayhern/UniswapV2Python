@@ -1,5 +1,5 @@
 from uniswapv2 import UniswapV2
-from utils import  decimal_round, is_percent_down, is_percent_up
+from utils import  decimal_round, is_percent_down, is_percent_up, pancakeswap_api_get_price
 from decimal import Decimal
 import logging
 import traceback
@@ -204,7 +204,11 @@ def save_pools_file(pool_dict, filename):
                 fp.write("%s,%s\n" % (address, pool_dict[address]))
     except:
         logging.debug(traceback.format_exc())
-        
+
+def get_token_price(token):
+    price_dict = pancakeswap_api_get_price(token)
+    token_price = price_dict["data"]["price"]
+    return token_price
 
 if __name__ == "__main__":
     main()

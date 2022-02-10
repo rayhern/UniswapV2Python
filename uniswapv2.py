@@ -1,6 +1,6 @@
 from web3 import Web3
-from decimal import Decimal, getcontext
-from utils import wei2eth, eth2wei, to_checksum, read_json_file
+from decimal import Decimal
+from utils import wei2eth, eth2wei, to_checksum, read_json_file, decimal_fix_places, decimal_round
 import traceback
 import time
 import logging
@@ -9,6 +9,8 @@ ROUTER_ABI_FILE = "./abi/UniswapV2Router.json"
 PAIR_ABI_FILE = "./abi/UniswapV2Pair.json"
 FACTORY_ABI_FILE = "./abi/UniswapV2Factory.json"
 ERC20_ABI_FILE = "./abi/ERC20.json"
+
+
 
 class UniswapV2():
     def __init__(
@@ -43,18 +45,8 @@ class UniswapV2():
         
     def get_nonce(self):
         return self.w3.eth.getTransactionCount(self.address)
-
-    def swap_tokens_for_eth(self, token_address, amount):
-        self.approve(token_address)
-        return self._swap_exact_tokens_for_eth(
-            eth2wei(amount), 
-            self._get_amounts_out(amount, [token_address, self._weth()])[1], 
-            [token_address, self._weth()], 
-            self.address, 
-            int(time.time() + 60), 30
-        )
     
-    def approve(self, contract_address, type_="token"):
+    def approve(self, contract_address, type_="token", max_tries=1):
         txn_receipt = None
         public_key = self.address
         contract_address = Web3.toChecksumAddress(contract_address)
@@ -62,31 +54,52 @@ class UniswapV2():
             contract = self.w3.eth.contract(contract_address, abi=self.pair_abi)
         elif type_ == "token":
             contract = self.w3.eth.contract(contract_address, abi=self.erc20_abi)
-        approved = contract.functions.allowance(
-            public_key, self.router_address).call()
-        if int(approved) <= 500:
-            # we have not approved this token yet. approve!
-            txn = contract.functions.approve(
-                self.router_address,
-                115792089237316195423570985008687907853269984665640564039457584007913129639935
-            ).buildTransaction(
-                {
-                    'from': public_key, 
-                    'gasPrice': self.w3.toWei(self.gas_price, 'gwei'),
-                    'nonce': self.get_nonce()
-                }
-            )
-            signed_txn = self.w3.eth.account.sign_transaction(
-                txn, self.private_key)
-            txn = self.w3.eth.sendRawTransaction(signed_txn.rawTransaction)
-            txn_receipt = self.w3.eth.waitForTransactionReceipt(txn)
-            if txn_receipt and "status" in txn_receipt and txn_receipt["status"] == 1: 
-                logging.info('Approved successfully!')
+        approved = False
+        try:
+            approved = contract.functions.allowance(public_key, self.router_address).call()
+            if int(approved) <= 500:
+                # we have not approved this token yet. approve!
+                for _ in range(max_tries):
+                    try:
+                        txn = contract.functions.approve(
+                            self.router_address,
+                            115792089237316195423570985008687907853269984665640564039457584007913129639935
+                        ).buildTransaction(
+                            {
+                                'from': public_key, 
+                                'gasPrice': self.w3.toWei(self.gas_price, 'gwei'),
+                                'nonce': self.get_nonce()
+                            }
+                        )
+                        signed_txn = self.w3.eth.account.sign_transaction(txn, self.private_key)
+                        txn = self.w3.eth.sendRawTransaction(signed_txn.rawTransaction)
+                        txn_receipt = self.w3.eth.waitForTransactionReceipt(txn)
+                        if txn_receipt and "status" in txn_receipt and txn_receipt["status"] == 1: 
+                            logging.info('Approved successfully!')
+                            approved = True
+                            break
+                    except:
+                        logging.debug(traceback.format_exc())
             else:
-                logging.info('Could not approve contract: %s' % contract_address)
-        return txn_receipt
+                logging.info('Contract %s already approved.' % contract_address)
+                approved = True
+        except:
+            logging.debug(traceback.format_exc())
+        if approved is False:
+            logging.info('Could not approve contract: %s' % contract_address)
+        return approved
 
-    def swap_all_tokens_for_tokens(self, from_token_address, to_token_address):
+    def swap_tokens_for_eth(self, token_address, amount, max_tries=1):
+        self.approve(token_address)
+        return self._swap_exact_tokens_for_eth(
+            eth2wei(amount), 
+            self._get_amounts_out(amount, [token_address, self._weth()])[1], 
+            [token_address, self._weth()], 
+            self.address, 
+            int(time.time() + 60), 30, max_tries=max_tries
+        )
+
+    def swap_all_tokens_for_tokens(self, from_token_address, to_token_address, max_tries=1):
         # make sure the router is approved to manage this token...
         self.approve(from_token_address)
         self.approve(to_token_address)
@@ -97,50 +110,40 @@ class UniswapV2():
         if amount_in > 0.0:
             # Now that we have how much we have in our balance we have to let the router
             # adjust the amounts so that swap_exact_tokens_for_tokens() evaluates properly.
-            amounts = self._get_amounts_out(amount_in, [from_token_address, to_token_address])
-            amount_in, amount_out = amounts
+            amount_in, amount_out = self._get_amounts_out(amount_in, [from_token_address, to_token_address])
+            amount_in = self._fix_decimal(amount_in, token_address=from_token_address)
+            amount_out = self._fix_decimal(amount_out, token_address=from_token_address)
+            
             logging.info('Swap %s: %s for %s: %s...' % (
-                from_token_address, wei2eth(amount_in), to_token_address, wei2eth(amount_out)))
+                from_token_address, amount_in, to_token_address, amount_out))
             
             # now we can start this party...
-            try:
-                result = self._swap_exact_tokens_for_tokens(
-                    amount_in, amount_out, [from_token_address, to_token_address], 
-                    account_address, int(time.time() + 60), 30)
-            except:
-                result = {"status": 0}
-                logging.debug("EXCEPTION: %s" % traceback.format_exc())
-            if result["status"] == 1:
+            result = self._swap_exact_tokens_for_tokens(
+                amount_in, amount_out, [from_token_address, to_token_address], 
+                account_address, int(time.time() + 60), 30, max_tries=max_tries)
+            if result and "status" in result and result["status"] == 1:
                 logging.info('Successfully swapped!')
-                return True
         else:
             logging.debug('WARNING: Not enough funds.')
-        return False
+        return result
     
-    def swap_tokens_for_single_token(self, from_token_address, to_token_address):
+    def swap_tokens_for_single_token(self, from_token_address, to_token_address, max_tries=1):
         self.approve(from_token_address)
         self.approve(to_token_address)
         account_address = self.address
         # get the amount of from token it costs to get a single to token.
-        amounts = self._get_amounts_in(eth2wei(1), [from_token_address, to_token_address])
-        # amounts = self._get_amounts_out(self.eth2wei(amount_in), [from_token_address, to_token_address])
-        amount_in, amount_out = amounts
+        amount_in, amount_out = self._get_amounts_in(eth2wei(1), [from_token_address, to_token_address])
+        normalized_amount_in = self._fix_decimal(amount_in, token_address=from_token_address)
+        normalized_amount_out = self._fix_decimal(amount_out, token_address=to_token_address)
         logging.info('Swap %s: %s for %s: %s...' % (
-            from_token_address, wei2eth(amount_in), to_token_address, wei2eth(amount_out)))
-        # logging.info('amount out: %s' % self.wei2eth(amounts[1]))
-        try:
-            result = self._swap_exact_tokens_for_tokens(
-                amount_in, amount_out, [from_token_address, to_token_address], 
-                account_address, int(time.time() + 60), 30)
-        except:
-            result = {"status": 0}
-        if result["status"] == 1:
+            from_token_address, normalized_amount_in, to_token_address, normalized_amount_out))
+        result = self._swap_exact_tokens_for_tokens(eth2wei(normalized_amount_in), eth2wei(normalized_amount_out), 
+            [from_token_address, to_token_address], account_address, int(time.time() + 60), 30, max_tries=max_tries)
+        if result and "status" in result and result["status"] == 1:
             logging.info('Successfully swapped!')
-            return True
-        else:
-            return False
+        return result
         
-    def swap_tokens_for_tokens(self, from_token_address, to_token_address, x_amount):
+    def swap_tokens_for_tokens(self, from_token_address, to_token_address, x_amount, max_tries=1):
         # not finished.
         self.approve(from_token_address)
         self.approve(to_token_address)
@@ -149,18 +152,21 @@ class UniswapV2():
         balance = self._get_balance(account_address, from_token_address)
         result = None
         if balance >= 1.0:
-            amount_in = self._get_amounts_out(self.eth2wei(x_amount), [to_token_address, from_token_address])[1]
-            amount_in = wei2eth(amount_in)
+            amount_out, amount_in = self._get_amounts_out(self.eth2wei(x_amount), [to_token_address, from_token_address])
+            amount_in = self._fix_decimal(amount_in, token_address=from_token_address)
+            amount_out = self._fix_decimal(amount_out, token_address=to_token_address)
             logging.info('amount in: %s' % amount_in)
-            
-            # result = self.router.swap_exact_tokens_for_tokens(
-            #     self.hrc20.eth2wei(amount_in), self.hrc20.eth2wei(x_amount), [from_token_address, to_token_address], 
-            #     account_address, int(time.time() + 60), 30)
+            logging.info('amount out: %s' % amount_out)
+            result = self._swap_exact_tokens_for_tokens(
+                eth2wei(amount_in), eth2wei(x_amount), [from_token_address, to_token_address], 
+                account_address, int(time.time() + 60), 30, max_tries=max_tries)
+            if result and "status" in result and result["status"] == 1:
+                logging.info('Successfully swapped!')
         else:
             logging.info('not enough tokens to swap.')
         return result
     
-    def add_liquidity(self, tokenA, tokenB, amountA, amountB, txn_timeout):
+    def add_liquidity(self, tokenA, tokenB, amountA, amountB, txn_timeout, max_tries=1):
         # make sure the router is approved to manage this token...
         pool_address = self.pool_get_address(tokenA, tokenB)
         
@@ -188,24 +194,19 @@ class UniswapV2():
             amountA, amountB_min = self._get_amounts_out(amountA, [tokenA, tokenB])
         else:
             if amountB is None:
-                raise Exception("DefiKingdoms Exception: amountA or amountB is required when adding liquidity. None can be used on A or B but not both..")
+                raise Exception("amountA or amountB is required when adding liquidity. None can be used on A or B but not both..")
             amountA, amountB_min = self._get_amounts_in(amountB, [tokenA, tokenB])
             amountB, amountA_min = self._get_amounts_out(amountB, [tokenB, tokenA])
 
-        try:
-            results = self._add_liquidity(
-                tokenA, tokenB, amountA, amountB, amountA_min, amountB_min, deadline, txn_timeout)
-        except:
-            logging.debug(traceback.format_exc())
-            results = None
+        results = self._add_liquidity(
+            tokenA, tokenB, amountA, amountB, amountA_min, amountB_min, deadline, txn_timeout, max_tries=max_tries)
             
-        if results["status"] == 1:
+        if results and "status" in results and results["status"] == 1:
             logging.info("Successfully added liquidity to pool: %s!" % pool_address)
-            return True
-        else:
-            return False
+        
+        return results
     
-    def remove_all_liquidity(self, pair_address):
+    def remove_liquidity_from_pair(self, pair_address, max_tries=1):
         # make sure that tokens and pool are allowed to spend funds.
         pair_contract = self._get_pair_contract(pair_address)
         tokenA = pair_contract.functions.token0().call()
@@ -215,29 +216,33 @@ class UniswapV2():
         self.approve(tokenB)
         self.approve(pair_address, contract_type="pair")
         deadline = int(time.time() + 60)
-        liquidity = pair_contract.functions.balanceOf(self.address).call()
+        liquidity = wei2eth(pair_contract.functions.balanceOf(self.address).call())
         reserves = pair_contract.functions.getReserves().call()
-        total_supply = pair_contract.functions.totalSupply().call()
+        total_supply = wei2eth(pair_contract.functions.totalSupply().call())
+        reserves[0] = self._fix_decimal(reserves[0], token_address=tokenB)
         amountA = liquidity / (total_supply / reserves[0])
         # get the minimum value accepted for the removal of liquidity.
         _, amountA_min = self._get_amounts_in(amountA, [tokenB, tokenA])
         _, amountB_min = self._get_amounts_out(amountA, [tokenA, tokenB])
-        try:
-            tx_receipt = self._remove_liquidity(
-                tokenA, tokenB, liquidity, amountA_min, amountB_min, deadline)
-            if tx_receipt and "status" in tx_receipt and tx_receipt["status"] == 1:
-                return True
-        except:
-            logging.debug(traceback.format_exc())
-            tx_receipt = {"status": 0}
-        return False
+        logging.info('amountA_min: %s' % amountA_min)
+        logging.info('amountB_min: %s' % amountB_min)
+        tx_receipt = self._remove_liquidity(
+            tokenA, tokenB, liquidity, amountA_min, amountB_min, deadline, max_tries=max_tries)
+        if tx_receipt and "status" in tx_receipt and tx_receipt["status"] == 1:
+            logging.info('Removed liquidity successfully!')
+        return tx_receipt
     
-    def get_price_for_amount(self, amount, token, value_token=None):
+    def get_token_price(self, amount, token, value_token=None):
         if value_token is None:
             value_token = self._weth()
-        _, token_price = self._get_amounts_out(amount, [to_checksum(token), to_checksum(value_token)])
-        return self._fix_decimal(token_price, token_address=value_token)
-        
+        fixed_token_price = None
+        try:
+            _, token_price = self._get_amounts_out(amount, [to_checksum(token), to_checksum(value_token)])
+            fixed_token_price = self._fix_decimal(token_price, token_address=value_token)
+        except:
+            logging.debug(traceback.format_exc())
+        return fixed_token_price
+    
     ### PRIVATE METHODS ###
     
     def _weth(self):
@@ -245,7 +250,7 @@ class UniswapV2():
     
     def _fix_decimal(self, amount, token_address=None, decimals=None):
         if decimals is not None:
-            return amount / (10 ** decimals)
+            return decimal_fix_places(amount, decimals)
         elif token_address is not None:
             return amount / (10 ** self._get_decimals(token_address))
         else:
@@ -254,57 +259,65 @@ class UniswapV2():
     def _link(self, txid):
         return '%s%s' % (self.block_explorer_prefix, str(txid))
     
-    def _add_liquidity(self, tokenA, tokenB, amountA, amountB, amountA_min, amountB_min, deadline):
+    def _add_liquidity(self, tokenA, tokenB, amountA, amountB, amountA_min, amountB_min, deadline, max_tries=1):
         
         tokenA_symbol = self._get_symbol(tokenA)
         tokenB_symbol = self._get_symbol(tokenB)
+        fixed_amountA = self._fix_decimal(amountA, token_address=tokenA)
+        fixed_amountB = self._fix_decimal(amountB, token_address=tokenB)
         
         logging.info('Adding liquidity to %s<>%s. Amounts: %s, %s...' % (
-            tokenA_symbol, tokenB_symbol, wei2eth(amountA), wei2eth(amountB)))
+            tokenA_symbol, tokenB_symbol, fixed_amountA, fixed_amountB))
         
         # This was a bitch...
-        try:
-            tx = self.router_contract.functions.addLiquidity(
-                tokenA, tokenB, amountA, amountB, amountA_min, amountB_min, self.address, deadline).buildTransaction(
-                    {'gasPrice': self.w3.toWei(self.gas_price, 'gwei'), 'nonce': self.get_nonce()})
-            logging.debug("Signing transaction")
-            signed_tx = self.w3.eth.account.sign_transaction(tx, private_key=self.private_key)
-            logging.debug("Sending transaction: %s" % str(signed_tx))
-            ret = self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
-            logging.debug("Transaction successfully sent !")
-            logging.info(
-                "Waiting for confirmation: " + self._link(signed_tx.hash.hex()))
-            tx_receipt = self.w3.eth.wait_for_transaction_receipt(
-                transaction_hash=signed_tx.hash, timeout=self.txn_timeout, poll_latency=3)
-            if tx_receipt and "status" in tx_receipt and tx_receipt["status"] == 1:
-                logging.info("Transaction confirmed !")
-        except:
-            logging.debug(traceback.format_exc())
-            tx_receipt = {"status": 0}
+        for _ in range(max_tries):
+            try:
+                tx = self.router_contract.functions.addLiquidity(
+                    tokenA, tokenB, amountA, amountB, amountA_min, amountB_min, self.address, deadline).buildTransaction(
+                        {'gasPrice': self.w3.toWei(self.gas_price, 'gwei'), 'nonce': self.get_nonce()})
+                logging.debug("Signing transaction")
+                signed_tx = self.w3.eth.account.sign_transaction(tx, private_key=self.private_key)
+                logging.debug("Sending transaction: %s" % str(signed_tx))
+                ret = self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+                logging.debug("Transaction successfully sent !")
+                logging.info(
+                    "Waiting for confirmation: " + self._link(signed_tx.hash.hex()))
+                tx_receipt = self.w3.eth.wait_for_transaction_receipt(
+                    transaction_hash=signed_tx.hash, timeout=self.txn_timeout, poll_latency=3)
+                if tx_receipt and "status" in tx_receipt and tx_receipt["status"] == 1:
+                    logging.info("Transaction confirmed !")
+                    break
+            except:
+                logging.debug(traceback.format_exc())
+                tx_receipt = {"status": 0}
+                time.sleep(30)
         return tx_receipt
 
-    def _remove_liquidity(self, tokenA, tokenB, liquidity, amountA_min, amountB_min, deadline):
-        token0_symbol = self._get_symbol(tokenA)
-        token1_symbol = self._get_symbol(tokenB)
-        logging.info('Removing %s LP from %s<>%s...' % (round(liquidity, 8), token0_symbol, token1_symbol))
-        try:
-            tx = self.router_contract.functions.removeLiquidity(
-                tokenA, tokenB, liquidity, amountA_min, amountB_min, self.address, deadline).buildTransaction(
-                    {'gasPrice': self.w3.toWei(self.gas_price, 'gwei'), 'nonce': self.get_nonce()})
-            logging.debug("Signing transaction")
-            signed_tx = self.w3.eth.account.sign_transaction(tx, private_key=self.private_key)
-            logging.debug("Sending transaction: %s" % str(signed_tx))
-            ret = self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
-            logging.debug("Transaction successfully sent !")
-            logging.info(
-                "Waiting for confirmation: " + self._link(signed_tx.hash.hex()))
-            tx_receipt = self.w3.eth.wait_for_transaction_receipt(
-                transaction_hash=signed_tx.hash, timeout=self.txn_timeout, poll_latency=3)
-            if tx_receipt and "status" in tx_receipt and tx_receipt["status"] == 1:
-                logging.info("Transaction confirmed !")
-        except:
-            logging.debug(traceback.format_exc())
-            tx_receipt = {"status": 0}
+    def _remove_liquidity(self, tokenA, tokenB, liquidity, amountA_min, amountB_min, deadline, max_tries=1):
+        tx_receipt = None
+        for _ in range(max_tries):
+            token0_symbol = self._get_symbol(tokenA)
+            token1_symbol = self._get_symbol(tokenB)
+            logging.info('Removing %s LP from %s<>%s...' % (round(liquidity, 8), token0_symbol, token1_symbol))
+            try:
+                tx = self.router_contract.functions.removeLiquidity(
+                    tokenA, tokenB, liquidity, amountA_min, amountB_min, self.address, deadline).buildTransaction(
+                        {'gasPrice': self.w3.toWei(self.gas_price, 'gwei'), 'nonce': self.get_nonce()})
+                logging.debug("Signing transaction")
+                signed_tx = self.w3.eth.account.sign_transaction(tx, private_key=self.private_key)
+                logging.debug("Sending transaction: %s" % str(signed_tx))
+                ret = self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+                logging.debug("Transaction successfully sent !")
+                logging.info(
+                    "Waiting for confirmation: " + self._link(signed_tx.hash.hex()))
+                tx_receipt = self.w3.eth.wait_for_transaction_receipt(
+                    transaction_hash=signed_tx.hash, timeout=self.txn_timeout, poll_latency=3)
+                if tx_receipt and "status" in tx_receipt and tx_receipt["status"] == 1:
+                    logging.info("Transaction confirmed !")
+                    break
+            except:
+                logging.debug(traceback.format_exc())
+                tx_receipt = {"status": 0}
         return tx_receipt
 
     def _get_amount_in(self, amount_out, reserve_in, reserve_out):
@@ -358,38 +371,52 @@ class UniswapV2():
     def _quote(self, amount_a, reserve_a, reserve_b):
         return self.router_contract.functions.quote(amount_a, reserve_a, reserve_b).call()
     
-    def _swap_exact_tokens_for_tokens(self, amount_in, amount_out_min, path, to, deadline):
-        tx = self.router_contract.functions.swapExactTokensForTokens(
-            amount_in, amount_out_min, path, to, deadline).buildTransaction(
-            {'gasPrice': self.w3.toWei(self.gas_price, 'gwei'), 
-             'nonce': self.get_nonce()})
-        logging.debug("Signing transaction")
-        signed_tx = self.w3.eth.account.sign_transaction(tx, private_key=self.private_key)
-        logging.debug("Sending transaction " + str(tx))
-        ret = self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
-        logging.debug("Transaction successfully sent !")
-        logging.info(
-            "Waiting for confirmation: " + self._link(signed_tx.hash.hex()))
-        tx_receipt = self.w3.eth.wait_for_transaction_receipt(
-            transaction_hash=signed_tx.hash, timeout=self.txn_timeout, poll_latency=3)
-        if tx_receipt and "status" in tx_receipt and tx_receipt["status"] == 1:
-            logging.info("Transaction confirmed !")
+    def _swap_exact_tokens_for_tokens(self, amount_in, amount_out_min, path, to, deadline, max_tries=1):
+        tx_receipt = None
+        for _ in range(max_tries):
+            try:
+                tx = self.router_contract.functions.swapExactTokensForTokens(
+                    amount_in, amount_out_min, path, to, deadline).buildTransaction(
+                    {'gasPrice': self.w3.toWei(self.gas_price, 'gwei'), 
+                    'nonce': self.get_nonce()})
+                logging.debug("Signing transaction")
+                signed_tx = self.w3.eth.account.sign_transaction(tx, private_key=self.private_key)
+                logging.debug("Sending transaction " + str(tx))
+                ret = self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+                logging.debug("Transaction successfully sent !")
+                logging.info(
+                    "Waiting for confirmation: " + self._link(signed_tx.hash.hex()))
+                tx_receipt = self.w3.eth.wait_for_transaction_receipt(
+                    transaction_hash=signed_tx.hash, timeout=self.txn_timeout, poll_latency=3)
+                if tx_receipt and "status" in tx_receipt and tx_receipt["status"] == 1:
+                    logging.info("Transaction confirmed !")
+                    break
+                else:
+                    logging.info('Could not perform swap.')
+                    time.sleep(60)
+            except:
+                logging.debug(traceback.format_exc())
         return tx_receipt
     
-    def _swap_exact_tokens_for_eth(self, amount_in, amount_out_min, path, to, deadline, tx_timeout_seconds):
-        tx = self.router_contract.functions.swapExactTokensForETH(amount_in, amount_out_min, path, to, deadline).buildTransaction(
-            {'gasPrice': self.w3.toWei(self.gas_price, 'gwei'), 'nonce': self.get_nonce()})
-        logging.debug("Signing transaction")
-        signed_tx = self.w3.eth.account.sign_transaction(tx, private_key=self.private_key)
-        logging.debug("Sending transaction " + str(tx))
-        ret = self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
-        logging.debug("Transaction successfully sent !")
-        logging.info(
-            "Waiting for confirmation: " + self._link(signed_tx.hash.hex()))
-        tx_receipt = self.w3.eth.wait_for_transaction_receipt(
-            transaction_hash=signed_tx.hash, timeout=self.txn_timeout, poll_latency=3)
-        if tx_receipt and "status" in tx_receipt and tx_receipt["status"] == 1:
-            logging.info("Transaction confirmed !")
+    def _swap_exact_tokens_for_eth(self, amount_in, amount_out_min, path, to, deadline, max_tries=1):
+        for _ in range(max_tries):
+            try:
+                tx = self.router_contract.functions.swapExactTokensForETH(amount_in, amount_out_min, path, to, deadline).buildTransaction(
+                    {'gasPrice': self.w3.toWei(self.gas_price, 'gwei'), 'nonce': self.get_nonce()})
+                logging.debug("Signing transaction")
+                signed_tx = self.w3.eth.account.sign_transaction(tx, private_key=self.private_key)
+                logging.debug("Sending transaction " + str(tx))
+                ret = self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+                logging.debug("Transaction successfully sent !")
+                logging.info(
+                    "Waiting for confirmation: " + self._link(signed_tx.hash.hex()))
+                tx_receipt = self.w3.eth.wait_for_transaction_receipt(
+                    transaction_hash=signed_tx.hash, timeout=self.txn_timeout, poll_latency=3)
+                if tx_receipt and "status" in tx_receipt and tx_receipt["status"] == 1:
+                    logging.info("Transaction confirmed !")
+                    break
+            except:
+                logging.debug(traceback.format_exc())
         return tx_receipt
     
     def _get_pair_address(self, token_address_1, token_address_2):
@@ -459,11 +486,8 @@ class UniswapV2():
         logging.debug('amount1: %s' % token1_pool_amount)
         
         if str(token0) != str(value_token):
-            # remove these if code works.
-            # token1_pool_amount = Web3.fromWei(token1_pool_amount, "ether")
             token0_value = Web3.fromWei(self._get_amounts_out(1, [token0, value_token])[1], "ether") * token0_pool_amount
         else:
-            # token0_pool_amount = Web3.fromWei(token0_pool_amount, "ether")
             token0_value = token0_pool_amount
         
         if str(token1) != str(value_token):
