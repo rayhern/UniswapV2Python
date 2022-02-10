@@ -51,11 +51,20 @@ def main():
     value_token_name = None
     start_time = time.time()
     initial_report_time = time.time()
+    percent_remove_time = time.time()
     while True:
         
         # Do not reset the timer until the end of the loop.
         if time.time() - initial_report_time > (REPORT_ALL_POOLS_EVERY_MINS * 60):
             initial_report_dict = {}
+        
+        # Force the percent remove dict to reset so that updated values are used when comparing percent up/down
+        # So that it doesnt have the same starting values for all its run length time.
+        # Resets this dict every 5 hours.
+        if time.time() - percent_remove_time > (60 * 60 * 5):
+            logging.debug('Cleared percent_remove_dict.')
+            percent_remove_dict = {}
+            percent_remove_time = time.time()
         
         # create my spiffy new uniswap class. works for all networks and forks.
         # Added uniswap object initialization every loop incase connection is lost or something.
@@ -118,10 +127,8 @@ def main():
                         # set the start dicts total value, so it doesnt report on loop
                         percent_remove_dict[pair_address] = pool_info["total_value"]
                         # remove all liquidity from pair address.
-                        # TODO put this back!
-                        # remove_result = uniswap.remove_all_liquidity(pair_address)
-                        # while remove_result is False:
-                        #     remove_result = uniswap.remove_all_liquidity(pair_address)
+                        remove_result = uniswap.remove_liquidity_from_pair(pair_address, max_tries=RPC_ATTEMPTS)
+                        logging.info('remove result: %s.' % remove_result)
                         # add to remove list, so that pair is removed from processing.
                         remove_pools.append(pair_address)
                 elif pool_info["total_value"] < previous_worth_dict[pair_address]:
@@ -136,10 +143,8 @@ def main():
                         # set the start dicts total value, so it doesnt report on loop
                         percent_remove_dict[pair_address] = pool_info["total_value"]
                         # remove all liquidity from pair address.
-                        # TODO put this back!
-                        # remove_result = uniswap.remove_all_liquidity(pair_address)
-                        # while remove_result is False:
-                        #     remove_result = uniswap.remove_all_liquidity(pair_address)
+                        remove_result = uniswap.remove_liquidity_from_pair(pair_address, max_tries=RPC_ATTEMPTS)
+                        logging.info('remove result: %s.' % remove_result)
                         # add to remove list, so that pair is removed from processing.
                         remove_pools.append(pair_address)
                         

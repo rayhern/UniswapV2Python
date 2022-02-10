@@ -214,13 +214,13 @@ class UniswapV2():
         # make sure that tokens and pool are allowed to spend funds.
         self.approve(tokenA)
         self.approve(tokenB)
-        self.approve(pair_address, contract_type="pair")
+        self.approve(pair_address, type_="pair")
         deadline = int(time.time() + 60)
         liquidity = wei2eth(pair_contract.functions.balanceOf(self.address).call())
         reserves = pair_contract.functions.getReserves().call()
         total_supply = wei2eth(pair_contract.functions.totalSupply().call())
         reserves[0] = self._fix_decimal(reserves[0], token_address=tokenB)
-        amountA = liquidity / (total_supply / reserves[0])
+        amountA = Decimal(liquidity) / (Decimal(total_supply) / Decimal(reserves[0]))
         # get the minimum value accepted for the removal of liquidity.
         _, amountA_min = self._get_amounts_in(amountA, [tokenB, tokenA])
         _, amountB_min = self._get_amounts_out(amountA, [tokenA, tokenB])
