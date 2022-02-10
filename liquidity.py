@@ -42,6 +42,18 @@ def main():
     # loads pools from a csv file, so we dont have to search all liquidity pools
     # every start.
     pools_dict = load_pools_file("pools.csv")
+    
+    # create my spiffy new uniswap class. works for all networks and forks.
+    # Added uniswap object initialization every loop incase connection is lost or something.
+    uniswap = UniswapV2(
+        PRIVATE_KEY, 
+        txn_timeout=TXN_TIMEOUT, 
+        gas_price_gwei=GAS_PRICE_IN_WEI, 
+        rpc_host=RPC_HOST, 
+        router_address=ROUTER_ADDRESS,
+        factory_address=FACTORY_ADDRESS,
+        block_explorer_prefix=BLOCK_EXPLORER_PREFIX
+    )
             
     previous_worth_dict = {}
     percent_changed_dict = {}
@@ -65,18 +77,6 @@ def main():
             logging.debug('Cleared percent_remove_dict.')
             percent_remove_dict = {}
             percent_remove_time = time.time()
-        
-        # create my spiffy new uniswap class. works for all networks and forks.
-        # Added uniswap object initialization every loop incase connection is lost or something.
-        uniswap = UniswapV2(
-            PRIVATE_KEY, 
-            txn_timeout=TXN_TIMEOUT, 
-            gas_price_gwei=GAS_PRICE_IN_WEI, 
-            rpc_host=RPC_HOST, 
-            router_address=ROUTER_ADDRESS,
-            factory_address=FACTORY_ADDRESS,
-            block_explorer_prefix=BLOCK_EXPLORER_PREFIX
-        )
         
         if not value_token_name:
             value_token_name = uniswap._get_symbol(value_token)
@@ -121,9 +121,8 @@ def main():
                             pool_info["symbol"], round(pool_info["total_value"], 7), round(previous_worth_dict[pair_address], 7)))
                         percent_changed_dict[pair_address] = pool_info["total_value"]
                     if is_percent_up(percent_remove_dict[pair_address], pool_info["total_value"], percent_up_remove_liquidity) is True:
-                        logging.info('WARNING: %s is UP UP UP %s percent since bot started.' % (
+                        logging.info('ATTENTION: %s is UP UP UP %s percent since bot started.' % (
                             pool_info["symbol"], percent_down_remove_liquidity))
-                        logging.info('Removing liquidity from pair $$$: %s...' % pool_info["symbol"])
                         # set the start dicts total value, so it doesnt report on loop
                         percent_remove_dict[pair_address] = pool_info["total_value"]
                         # remove all liquidity from pair address.
@@ -139,7 +138,6 @@ def main():
                     if is_percent_down(percent_remove_dict[pair_address], pool_info["total_value"], percent_down_remove_liquidity) is True:
                         logging.info('WARNING: %s is down %s percent since bot started.' % (
                             pool_info["symbol"], percent_down_remove_liquidity))
-                        logging.info('Removing liquidity from pair: %s...' % pool_info["symbol"])
                         # set the start dicts total value, so it doesnt report on loop
                         percent_remove_dict[pair_address] = pool_info["total_value"]
                         # remove all liquidity from pair address.
@@ -174,7 +172,6 @@ def main():
             except:
                 logging.debug(traceback.format_exc())
         
-        uniswap = None
         time.sleep(CHECK_MINUTE_DELAY * 60)
     
 def get_pair_info(client, pair_address, value_token):
