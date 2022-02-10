@@ -207,29 +207,36 @@ class UniswapV2():
         return results
     
     def remove_liquidity_from_pair(self, pair_address, max_tries=1):
-        # make sure that tokens and pool are allowed to spend funds.
-        pair_contract = self._get_pair_contract(pair_address)
-        tokenA = pair_contract.functions.token0().call()
-        tokenB = pair_contract.functions.token1().call()
-        # make sure that tokens and pool are allowed to spend funds.
-        self.approve(tokenA)
-        self.approve(tokenB)
-        self.approve(pair_address, type_="pair")
-        deadline = int(time.time() + 60)
-        liquidity = wei2eth(pair_contract.functions.balanceOf(self.address).call())
-        reserves = pair_contract.functions.getReserves().call()
-        total_supply = wei2eth(pair_contract.functions.totalSupply().call())
-        reserves[0] = self._fix_decimal(reserves[0], token_address=tokenB)
-        amountA = Decimal(liquidity) / (Decimal(total_supply) / Decimal(reserves[0]))
-        # get the minimum value accepted for the removal of liquidity.
-        _, amountA_min = self._get_amounts_in(eth2wei(amountA), [tokenB, tokenA])
-        _, amountB_min = self._get_amounts_out(eth2wei(amountA), [tokenA, tokenB])
-        logging.info('amountA_min: %s' % amountA_min)
-        logging.info('amountB_min: %s' % amountB_min)
-        tx_receipt = self._remove_liquidity(
-            tokenA, tokenB, liquidity, amountA_min, amountB_min, deadline, max_tries=max_tries)
-        if tx_receipt and "status" in tx_receipt and tx_receipt["status"] == 1:
-            logging.info('Removed liquidity successfully!')
+        tx_receipt = None
+        for _ in range(max_tries):
+            try:
+                # make sure that tokens and pool are allowed to spend funds.
+                pair_contract = self._get_pair_contract(pair_address)
+                tokenA = pair_contract.functions.token0().call()
+                tokenB = pair_contract.functions.token1().call()
+                # make sure that tokens and pool are allowed to spend funds.
+                self.approve(tokenA)
+                self.approve(tokenB)
+                self.approve(pair_address, type_="pair")
+                deadline = int(time.time() + 60)
+                liquidity = wei2eth(pair_contract.functions.balanceOf(self.address).call())
+                reserves = pair_contract.functions.getReserves().call()
+                total_supply = wei2eth(pair_contract.functions.totalSupply().call())
+                reserves[0] = self._fix_decimal(reserves[0], token_address=tokenB)
+                amountA = Decimal(liquidity) / (Decimal(total_supply) / Decimal(reserves[0]))
+                # get the minimum value accepted for the removal of liquidity.
+                _, amountA_min = self._get_amounts_in(eth2wei(amountA), [tokenB, tokenA])
+                _, amountB_min = self._get_amounts_out(eth2wei(amountA), [tokenA, tokenB])
+                logging.info('amountA_min: %s' % amountA_min)
+                logging.info('amountB_min: %s' % amountB_min)
+            except:
+                logging.info(traceback.format_exc())
+                time.sleep(60)
+                continue
+            tx_receipt = self._remove_liquidity(
+                tokenA, tokenB, liquidity, amountA_min, amountB_min, deadline, max_tries=max_tries)
+            if tx_receipt and "status" in tx_receipt and tx_receipt["status"] == 1:
+                logging.info('Removed liquidity successfully!')
         return tx_receipt
     
     def get_token_price(self, amount, token, value_token=None):
