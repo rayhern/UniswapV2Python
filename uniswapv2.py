@@ -173,7 +173,7 @@ class UniswapV2():
         # make sure that tokens and pool are allowed to spend funds.
         self.approve(tokenA)
         self.approve(tokenB)
-        self.approve(pool_address, contract_type="pair")
+        self.approve(pool_address, type_="pair")
         
         deadline = int(time.time() + 60)
         account_address = self._get_address()
