@@ -454,66 +454,70 @@ class UniswapV2():
                 pairs.append(self._get_pair_index(i))
         return pairs
     
-    def _get_pool_info(self, pair_address, value_token=None):
-        if value_token is None:
-            value_token = self._weth()
-        try:
-            pair_contract = self._get_pair_contract(pair_address)
-            reserves = pair_contract.functions.getReserves().call()
-            pair_balance = pair_contract.functions.balanceOf(self.address).call()
-            total_supply = pair_contract.functions.totalSupply().call()
-            token0 = pair_contract.functions.token0().call()
-            token1 = pair_contract.functions.token1().call()
-            token0_contract = self._get_token_contract(token0)
-            token1_contract = self._get_token_contract(token1)
-            token0_decimals = token0_contract.functions.decimals().call()
-            token1_decimals = token1_contract.functions.decimals().call()
-            token0_name = token0_contract.functions.symbol().call()
-            token1_name = token1_contract.functions.symbol().call()
-        except:
-            logging.debug(traceback.format_exc())
-            return None
-        
-        # fix the decimals to the correct places.
-        # DO NOT USE fromWei()!
-        reserves[0] = self._fix_decimal(reserves[0], decimals=token0_decimals)
-        reserves[1] = self._fix_decimal(reserves[1], decimals=token1_decimals)
-        
-        total_supply = Web3.fromWei(total_supply, "ether")
-        pair_balance = Web3.fromWei(pair_balance, "ether")
-        
-        # Find the amount for both sides of the pair.
-        token0_pool_amount = Decimal(pair_balance) / (Decimal(total_supply) / Decimal(reserves[0]))
-        token1_pool_amount = Decimal(pair_balance) / (Decimal(total_supply) / Decimal(reserves[1]))
-        
-        logging.debug('reserves: %s' % reserves)
-        logging.debug('total supply: %s' % total_supply)
-        logging.debug('pair_balance: %s.' % pair_balance)
-        logging.debug('amount0: %s' % token0_pool_amount)
-        logging.debug('amount1: %s' % token1_pool_amount)
-        
-        if str(token0) != str(value_token):
-            token0_value = Web3.fromWei(self._get_amounts_out(1, [token0, value_token])[1], "ether") * token0_pool_amount
-        else:
-            token0_value = token0_pool_amount
-        
-        if str(token1) != str(value_token):
-            token1_value = Web3.fromWei(self._get_amounts_out(1, [token1, value_token])[1], "ether") * token1_pool_amount
-        else:
-            token1_value = token1_pool_amount
-        
-        total_value = token1_value + token0_value
-        
-        return {
-            "reserves": reserves,
-            "token0": token0,
-            "token1": token1,
-            "token0_name": token0_name,
-            "token1_name": token1_name,
-            "symbol": "%s<>%s" % (token0_name, token1_name),
-            "token0_amount": token0_pool_amount,
-            "token1_amount": token1_pool_amount,
-            "total_value": total_value
-        }
+    def _get_pool_info(self, pair_address, value_token=None, max_tries=3):
+        result = {}
+        for _ in range(max_tries):
+            try:
+                if value_token is None:
+                    value_token = self._weth()
+                pair_contract = self._get_pair_contract(pair_address)
+                reserves = pair_contract.functions.getReserves().call()
+                pair_balance = pair_contract.functions.balanceOf(self.address).call()
+                total_supply = pair_contract.functions.totalSupply().call()
+                token0 = pair_contract.functions.token0().call()
+                token1 = pair_contract.functions.token1().call()
+                token0_contract = self._get_token_contract(token0)
+                token1_contract = self._get_token_contract(token1)
+                token0_decimals = token0_contract.functions.decimals().call()
+                token1_decimals = token1_contract.functions.decimals().call()
+                token0_name = token0_contract.functions.symbol().call()
+                token1_name = token1_contract.functions.symbol().call()
+                
+                # fix the decimals to the correct places.
+                # DO NOT USE fromWei()!
+                reserves[0] = self._fix_decimal(reserves[0], decimals=token0_decimals)
+                reserves[1] = self._fix_decimal(reserves[1], decimals=token1_decimals)
+                
+                total_supply = Web3.fromWei(total_supply, "ether")
+                pair_balance = Web3.fromWei(pair_balance, "ether")
+                
+                # Find the amount for both sides of the pair.
+                token0_pool_amount = Decimal(pair_balance) / (Decimal(total_supply) / Decimal(reserves[0]))
+                token1_pool_amount = Decimal(pair_balance) / (Decimal(total_supply) / Decimal(reserves[1]))
+                
+                logging.debug('reserves: %s' % reserves)
+                logging.debug('total supply: %s' % total_supply)
+                logging.debug('pair_balance: %s.' % pair_balance)
+                logging.debug('amount0: %s' % token0_pool_amount)
+                logging.debug('amount1: %s' % token1_pool_amount)
+                
+                if str(token0) != str(value_token):
+                    token0_value = Web3.fromWei(self._get_amounts_out(1, [token0, value_token])[1], "ether") * token0_pool_amount
+                else:
+                    token0_value = token0_pool_amount
+                
+                if str(token1) != str(value_token):
+                    token1_value = Web3.fromWei(self._get_amounts_out(1, [token1, value_token])[1], "ether") * token1_pool_amount
+                else:
+                    token1_value = token1_pool_amount
+                
+                total_value = token1_value + token0_value
+                
+                result = {
+                    "reserves": reserves,
+                    "token0": token0,
+                    "token1": token1,
+                    "token0_name": token0_name,
+                    "token1_name": token1_name,
+                    "symbol": "%s<>%s" % (token0_name, token1_name),
+                    "token0_amount": token0_pool_amount,
+                    "token1_amount": token1_pool_amount,
+                    "total_value": total_value
+                }
+                break
+            except:
+                logging.debug(traceback.format_exc())
+                return None
+        return result
 
     

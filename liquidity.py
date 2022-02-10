@@ -28,18 +28,6 @@ def main():
     logging.basicConfig(level=logging.INFO, format=log_format, stream=sys.stdout)
     logging.info('Uniswap Liquidity Watcher v%s Started!' % VERSION)
     
-    # token address to use when determining total value of pool
-    # currently this is set to jewel.
-    value_token = VALUE_TOKEN
-    
-    # how much percent to be down before pulling all liquidity
-    percent_down_remove_liquidity = PERCENT_DOWN_REMOVE_LIQUIDITY
-    
-    percent_up_remove_liquidity = PERCENT_UP_REMOVE_LIQUIDITY
-    
-    # how much percent to be down before reporting in the log.
-    percent_report_change = PERCENT_REPORT_CHANGE
-    
     # create my spiffy new uniswap class. works for all networks and forks.
     # Added uniswap object initialization every loop incase connection is lost or something.
     uniswap = UniswapV2(
@@ -52,10 +40,7 @@ def main():
         block_explorer_prefix=BLOCK_EXPLORER_PREFIX
     )
     
-    
-    start_time = time.time()
     pools_dict = load_pools_dict(uniswap)
-    
     stats_dict = {
         'previous_worth_dict': {},
         'percent_changed_dict': {},
@@ -66,8 +51,9 @@ def main():
         'value_token_name': None,
         'initial_report_time': time.time(),
         'percent_remove_time': time.time(),
-        'percent_up_remove_liquidity': percent_up_remove_liquidity,
-        'percent_down_remove_liquidity': percent_down_remove_liquidity,
+        'percent_up_remove_liquidity': PERCENT_UP_REMOVE_LIQUIDITY,
+        'percent_down_remove_liquidity': PERCENT_DOWN_REMOVE_LIQUIDITY,
+        'percent_report_change': PERCENT_REPORT_CHANGE,
         'pools_dict': pools_dict
     }
     
