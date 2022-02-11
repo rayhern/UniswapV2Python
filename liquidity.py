@@ -40,6 +40,9 @@ def main():
         block_explorer_prefix=BLOCK_EXPLORER_PREFIX
     )
     
+    # load all joined pools either from the RPC, or saved from pools.csv
+    # if you want to refresh your list of pools, then delete pools.csv 
+    # then run the program again.
     pools_dict = load_pools_dict(uniswap)
     stats_dict = {
         'previous_worth_dict': {},
@@ -116,7 +119,7 @@ def process_pools(client, stats_dict):
         stats_dict["pools_dict"][pair_address] = pool_info["total_value"]
         if pair_address not in stats_dict["initial_report_dict"]:
             stats_dict["initial_report_dict"][pair_address] = pool_info["total_value"]
-            logging.info('symbol: %s. %s: %s. %s: %s. value: %s.' % (
+            logging.info('%s. %s: %s. %s: %s. value: %s.' % (
                 pool_info["symbol"], pool_info["token0_name"], decimal_round(pool_info["token0_amount"], 5),
                 pool_info["token1_name"], decimal_round(pool_info["token1_amount"], 5), decimal_round(pool_info["total_value"], 5)))
         if pair_address not in stats_dict["percent_changed_dict"]:
