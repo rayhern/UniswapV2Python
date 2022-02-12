@@ -81,12 +81,12 @@ class UniswapV2():
                     except:
                         logging.debug(traceback.format_exc())
             else:
-                logging.info('Contract %s already approved.' % contract_address)
+                logging.debug('Contract %s already approved.' % contract_address)
                 approved = True
         except:
             logging.debug(traceback.format_exc())
         if approved is False:
-            logging.info('Could not approve contract: %s' % contract_address)
+            logging.debug('Could not approve contract: %s' % contract_address)
         return approved
 
     def swap_tokens_for_eth(self, token_address, amount, max_tries=1):
@@ -219,22 +219,13 @@ class UniswapV2():
                 self.approve(tokenB)
                 self.approve(pair_address, type_="pair")
                 deadline = int(time.time() + 60)
-                liquidity = wei2eth(pair_contract.functions.balanceOf(self.address).call())
-                reserves = pair_contract.functions.getReserves().call()
-                total_supply = wei2eth(pair_contract.functions.totalSupply().call())
-                reserves[0] = self._fix_decimal(reserves[0], token_address=tokenB)
-                amountA = Decimal(liquidity) / (Decimal(total_supply) / Decimal(reserves[0]))
-                # get the minimum value accepted for the removal of liquidity.
-                _, amountA_min = self._get_amounts_in(eth2wei(amountA), [tokenB, tokenA])
-                _, amountB_min = self._get_amounts_out(eth2wei(amountA), [tokenA, tokenB])
-                logging.info('amountA_min: %s' % amountA_min)
-                logging.info('amountB_min: %s' % amountB_min)
+                liquidity = pair_contract.functions.balanceOf(self.address).call()
             except:
                 logging.info(traceback.format_exc())
                 time.sleep(60)
                 continue
             tx_receipt = self._remove_liquidity(
-                tokenA, tokenB, liquidity, amountA_min, amountB_min, deadline, max_tries=max_tries)
+                tokenA, tokenB, liquidity, 1, 1, deadline, max_tries=max_tries)
             if tx_receipt and "status" in tx_receipt and tx_receipt["status"] == 1:
                 logging.info('Removed liquidity successfully!')
         return tx_receipt
@@ -305,7 +296,7 @@ class UniswapV2():
         for _ in range(max_tries):
             token0_symbol = self._get_symbol(tokenA)
             token1_symbol = self._get_symbol(tokenB)
-            logging.info('Removing %s LP from %s<>%s...' % (round(liquidity, 8), token0_symbol, token1_symbol))
+            logging.info('Removing %s LP from %s<>%s...' % (round(wei2eth(liquidity), 10), token0_symbol, token1_symbol))
             try:
                 tx = self.router_contract.functions.removeLiquidity(
                     tokenA, tokenB, liquidity, amountA_min, amountB_min, self.address, deadline).buildTransaction(
