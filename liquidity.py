@@ -40,6 +40,10 @@ def main():
         block_explorer_prefix=BLOCK_EXPLORER_PREFIX
     )
     
+    # r = uniswap.remove_liquidity_from_pair("0xC79245BA0248Abe8a385d588C0a9D3DB261B453c")
+    # logging.info(r)
+    # return
+    
     # load all joined pools either from the RPC, or saved from pools.csv
     # if you want to refresh your list of pools, then delete pools.csv 
     # then run the program again.
@@ -207,7 +211,7 @@ def save_pools_file(pool_dict, filename):
     try:
         with open(filename, "w") as fp:
             for address in pool_dict:
-                fp.write("%s,%s\n" % (address, pool_dict[address]))
+                fp.write("%s,%s\n" % (address, str(pool_dict[address]).strip()))
     except:
         logging.debug(traceback.format_exc())
 
