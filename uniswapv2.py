@@ -102,7 +102,7 @@ class UniswapV2():
     def swap_all_tokens_for_tokens(self, from_token_address, to_token_address, max_tries=1):
         # make sure the router is approved to manage this token...
         self.approve(from_token_address)
-        self.approve(to_token_address)
+        # self.approve(to_token_address)
         account_address = self.address
         # get the total amount of from_token_address in wallet.
         amount_in = self._get_balance(account_address, from_token_address)
@@ -129,7 +129,7 @@ class UniswapV2():
     
     def swap_tokens_for_single_token(self, from_token_address, to_token_address, max_tries=1):
         self.approve(from_token_address)
-        self.approve(to_token_address)
+        # self.approve(to_token_address)
         account_address = self.address
         # get the amount of from token it costs to get a single to token.
         amount_in, amount_out = self._get_amounts_in(eth2wei(1), [from_token_address, to_token_address])
@@ -146,7 +146,7 @@ class UniswapV2():
     def swap_tokens_for_tokens(self, from_token_address, to_token_address, x_amount, max_tries=1):
         # not finished.
         self.approve(from_token_address)
-        self.approve(to_token_address)
+        # self.approve(to_token_address)
         account_address = self.address
         # get the total amount of X in wallet.
         balance = self._get_balance(account_address, from_token_address)
@@ -171,9 +171,9 @@ class UniswapV2():
         pool_address = self.pool_get_address(tokenA, tokenB)
         
         # make sure that tokens and pool are allowed to spend funds.
-        self.approve(tokenA)
-        self.approve(tokenB)
-        self.approve(pool_address, type_="pair")
+        self.approve(tokenA, max_tries=max_tries)
+        self.approve(tokenB, max_tries=max_tries)
+        self.approve(pool_address, type_="pair", max_tries=max_tries)
         
         deadline = int(time.time() + 60)
         account_address = self._get_address()
@@ -215,40 +215,11 @@ class UniswapV2():
                 tokenA = pair_contract.functions.token0().call()
                 tokenB = pair_contract.functions.token1().call()
                 # make sure that tokens and pool are allowed to spend funds.
-                self.approve(tokenA)
-                self.approve(tokenB)
-                self.approve(pair_address, type_="pair")
-                #eth_amount: uint256(wei) = amount * self.balance / total_liquidity
-                #token_amount: uint256 = amount * token_reserve / total_liquidity
+                self.approve(tokenA, max_tries=max_tries)
+                self.approve(tokenB, max_tries=max_tries)
+                self.approve(pair_address, type_="pair", max_tries=max_tries)
                 deadline = int(time.time() + 60)
                 liquidity = wei2eth(pair_contract.functions.balanceOf(self.address).call())
-                # reserves = pair_contract.functions.getReserves().call()
-                # total_supply = pair_contract.functions.totalSupply().call()
-                # token0 = pair_contract.functions.token0().call()
-                # token1 = pair_contract.functions.token1().call()
-                # token0_contract = self._get_token_contract(token0)
-                # token1_contract = self._get_token_contract(token1)
-                # token0_decimals = token0_contract.functions.decimals().call()
-                # token1_decimals = token1_contract.functions.decimals().call()
-                # # fix the decimals to the correct places.
-                # # DO NOT USE fromWei()!
-                # reserves[0] = self._fix_decimal(reserves[0], decimals=token0_decimals)
-                # reserves[1] = self._fix_decimal(reserves[1], decimals=token1_decimals)
-                
-                # total_supply = Web3.fromWei(total_supply, "ether")
-
-                # # Find the amount for both sides of the pair.
-                # amountA_min = Decimal(liquidity) / (Decimal(total_supply) / Decimal(reserves[0]))
-                # amountB_min = Decimal(liquidity) / (Decimal(total_supply) / Decimal(reserves[1]))
-                
-                # amountB_min = wei2eth(self._get_amount_out(eth2wei(amountA_min), eth2wei(reserves[0]), eth2wei(reserves[1])))
-                # amountA_min = wei2eth(self._get_amount_out(eth2wei(amountB_min), eth2wei(reserves[1]), eth2wei(reserves[0])))
-                
-                # logging.info('reserves: %s' % reserves)
-                # logging.info('total supply: %s' % total_supply)
-                # logging.info('liquidity: %s.' % liquidity)
-                # logging.info('amount0: %s' % amountA_min)
-                # logging.info('amount1: %s' % amountB_min)
             except:
                 logging.info(traceback.format_exc())
                 time.sleep(60)
