@@ -323,7 +323,7 @@ class UniswapV2():
                     logging.info("Transaction confirmed !")
                     break
             except:
-                logging.debug(traceback.format_exc())
+                logging.info(traceback.format_exc())
                 tx_receipt = {"status": 0}
         return tx_receipt
 
