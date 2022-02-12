@@ -4,13 +4,12 @@ from utils import wei2eth, eth2wei, to_checksum, read_json_file, decimal_fix_pla
 import traceback
 import time
 import logging
+import random
 
 ROUTER_ABI_FILE = "./abi/UniswapV2Router.json"
 PAIR_ABI_FILE = "./abi/UniswapV2Pair.json"
 FACTORY_ABI_FILE = "./abi/UniswapV2Factory.json"
 ERC20_ABI_FILE = "./abi/ERC20.json"
-
-
 
 class UniswapV2():
     def __init__(
@@ -44,7 +43,8 @@ class UniswapV2():
         self.initialized = True
         
     def get_nonce(self):
-        return self.w3.eth.getTransactionCount(self.address)
+        nonce = self.w3.eth.getTransactionCount(self.address)
+        return nonce
     
     def approve(self, contract_address, type_="token", max_tries=1):
         txn_receipt = None
