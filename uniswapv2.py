@@ -90,7 +90,7 @@ class UniswapV2():
         return approved
 
     def swap_tokens_for_eth(self, token_address, amount, max_tries=1):
-        self.approve(token_address)
+        self.approve(token_address, max_tries=max_tries)
         return self._swap_exact_tokens_for_eth(
             eth2wei(amount), 
             self._get_amounts_out(amount, [token_address, self._weth()])[1], 
@@ -101,7 +101,7 @@ class UniswapV2():
 
     def swap_all_tokens_for_tokens(self, from_token_address, to_token_address, max_tries=1):
         # make sure the router is approved to manage this token...
-        self.approve(from_token_address)
+        self.approve(from_token_address, max_tries=max_tries)
         # self.approve(to_token_address)
         account_address = self.address
         # get the total amount of from_token_address in wallet.
@@ -128,7 +128,7 @@ class UniswapV2():
         return result
     
     def swap_tokens_for_single_token(self, from_token_address, to_token_address, max_tries=1):
-        self.approve(from_token_address)
+        self.approve(from_token_address, max_tries=max_tries)
         # self.approve(to_token_address)
         account_address = self.address
         # get the amount of from token it costs to get a single to token.
@@ -145,7 +145,7 @@ class UniswapV2():
         
     def swap_tokens_for_tokens(self, from_token_address, to_token_address, x_amount, max_tries=1):
         # not finished.
-        self.approve(from_token_address)
+        self.approve(from_token_address, max_tries=max_tries)
         # self.approve(to_token_address)
         account_address = self.address
         # get the total amount of X in wallet.
@@ -179,8 +179,8 @@ class UniswapV2():
         account_address = self._get_address()
         
         # get the total amount of from_token_address in wallet.
-        tokenA_balance = self._get_balance(account_address, tokenA)
-        tokenB_balance = self._get_balance(account_address, tokenB)
+        tokenA_balance = self._get_balance(account_address, tokenA, max_tries=max_tries)
+        tokenB_balance = self._get_balance(account_address, tokenB, max_tries=max_tries)
         
         # make sure user has enough in wallet to provide liquidity.
         if amountA and tokenA_balance < amountA:
@@ -190,13 +190,13 @@ class UniswapV2():
         
         # don't ask me how i figured this shit out. The docs were no help.
         if amountA:
-            amountB, amountA_min = self._get_amounts_in(amountA, [tokenB, tokenA])
-            amountA, amountB_min = self._get_amounts_out(amountA, [tokenA, tokenB])
+            amountB, amountA_min = self._get_amounts_in(amountA, [tokenB, tokenA], max_tries=max_tries)
+            amountA, amountB_min = self._get_amounts_out(amountA, [tokenA, tokenB], max_tries=max_tries)
         else:
             if amountB is None:
                 raise Exception("amountA or amountB is required when adding liquidity. None can be used on A or B but not both..")
-            amountA, amountB_min = self._get_amounts_in(amountB, [tokenA, tokenB])
-            amountB, amountA_min = self._get_amounts_out(amountB, [tokenB, tokenA])
+            amountA, amountB_min = self._get_amounts_in(amountB, [tokenA, tokenB], max_tries=max_tries)
+            amountB, amountA_min = self._get_amounts_out(amountB, [tokenB, tokenA], max_tries=max_tries)
 
         results = self._add_liquidity(
             tokenA, tokenB, amountA, amountB, amountA_min, amountB_min, deadline, txn_timeout, max_tries=max_tries)
@@ -319,46 +319,107 @@ class UniswapV2():
                 tx_receipt = {"status": 0}
         return tx_receipt
 
-    def _get_amount_in(self, amount_out, reserve_in, reserve_out):
-        return self.router_contract.functions.getAmountIn(amount_out, reserve_in, reserve_out).call()
+    def _get_amount_in(self, amount_out, reserve_in, reserve_out, max_tries=1):
+        response = None
+        for _ in range(max_tries):
+            try:
+                response = self.router_contract.functions.getAmountIn(
+                    amount_out, reserve_in, reserve_out).call()
+                if response is not None:
+                    break
+            except:
+                logging.info(traceback.format_exc())
+                response = None
+        return response
     
-    def _get_amount_out(self, amount_in, reserve_in, reserve_out):
-        return self.router_contract.functions.getAmountOut(amount_in, reserve_in, reserve_out).call()
+    def _get_amount_out(self, amount_in, reserve_in, reserve_out, max_tries=1):
+        response = None
+        for _ in range(max_tries):
+            try:
+                response = self.router_contract.functions.getAmountOut(
+                    amount_in, reserve_in, reserve_out).call()
+                if response is not None:
+                    break
+            except:
+                response = None
+                logging.info(traceback.format_exc())
+        return response
     
-    def _get_amounts_in(self, amount_out, path):
-        return self.router_contract.functions.getAmountsIn(amount_out, path).call()
+    def _get_amounts_in(self, amount_out, path, max_tries=1):
+        response = None
+        for _ in range(max_tries):
+            try:
+                response = self.router_contract.functions.getAmountsIn(
+                    amount_out, path).call()
+                if response is not None:
+                    break
+            except:
+                logging.info(traceback.format_exc())
+        return response
     
-    def _get_amounts_out(self, amount_in, path):
+    def _get_amounts_out(self, amount_in, path, max_tries=1):
         # this is where we need to handle slippage
-        return self.router_contract.functions.getAmountsOut(
-            amount_in,
-            path
-        ).call()
+        response = None
+        for _ in range(max_tries):
+            try:
+                response = self.router_contract.functions.getAmountsOut(
+                    amount_in,
+                    path
+                ).call()
+                if response is not None:
+                    break
+            except:
+                logging.info(traceback.format_exc())
+        return response
     
-    def _get_symbol(self, token_address):
-        contract_address = Web3.toChecksumAddress(token_address)
-        contract = self.w3.eth.contract(contract_address, abi=self.erc20_abi)
-        return contract.functions.symbol().call()
+    def _get_symbol(self, token_address, max_tries=1):
+        contract = self.w3.eth.contract(Web3.toChecksumAddress(token_address), abi=self.erc20_abi)
+        response = None
+        for _ in range(max_tries):
+            try:
+                response = contract.functions.symbol().call()
+                if response is not None:
+                    break
+            except:
+                logging.info(traceback.format_exc())
+        return response
     
-    def _get_name(self, token_address):
-        contract_address = Web3.toChecksumAddress(token_address)
-        contract = self.w3.eth.contract(contract_address, abi=self.erc20_abi)
-        return contract.functions.name().call()
+    def _get_name(self, token_address, max_tries=1):
+        contract = self.w3.eth.contract(Web3.toChecksumAddress(token_address), abi=self.erc20_abi)
+        for _ in range(max_tries):
+            try:
+                response = contract.functions.name().call()
+                if response is not None:
+                    break
+            except:
+                logging.info(traceback.format_exc())
+        return response
     
-    def _get_decimals(self, token_address):
-        contract_address = Web3.toChecksumAddress(token_address)
-        contract = self.w3.eth.contract(contract_address, abi=self.erc20_abi)
-        return contract.functions.decimals().call()
+    def _get_decimals(self, token_address, max_tries=1):
+        contract = self.w3.eth.contract(Web3.toChecksumAddress(token_address), abi=self.erc20_abi)
+        response = None
+        for _ in range(max_tries):
+            try:
+                response = contract.functions.decimals().call()
+                if response is not None:
+                    break
+            except:
+                logging.info(traceback.format_exc())
     
-    def _get_balance(self, address, token_address):
-        contract_address = Web3.toChecksumAddress(token_address)
-        contract = self.w3.eth.contract(contract_address, abi=self.erc20_abi)
-        return contract.functions.balanceOf(address).call()
+    def _get_balance(self, address, token_address, max_tries=1):
+        contract = self.w3.eth.contract(Web3.toChecksumAddress(token_address), abi=self.erc20_abi)
+        response = None
+        for _ in range(max_tries):
+            try:
+                response = contract.functions.balanceOf(address).call()
+                if response is not None:
+                    break
+            except:
+                logging.info(traceback.format_exc())
+        return response
     
     def _get_token_contract(self, token_address):
-        contract_address = Web3.toChecksumAddress(token_address)
-        contract = self.w3.eth.contract(contract_address, abi=self.erc20_abi)
-        return contract
+        return self.w3.eth.contract(Web3.toChecksumAddress(token_address), abi=self.erc20_abi)
     
     def _get_pair_contract(self, pair_address):
         return self.w3.eth.contract(
@@ -367,8 +428,16 @@ class UniswapV2():
     def _weth(self):
         return self.router_contract.functions.WETH().call()
     
-    def _quote(self, amount_a, reserve_a, reserve_b):
-        return self.router_contract.functions.quote(amount_a, reserve_a, reserve_b).call()
+    def _quote(self, amount_a, reserve_a, reserve_b, max_tries=1):
+        response = None
+        for _ in range(max_tries):
+            try:
+                response = self.router_contract.functions.quote(amount_a, reserve_a, reserve_b).call()
+                if response is not None:
+                    break
+            except:
+                logging.info(traceback.format_exc())
+        return response
     
     def _swap_exact_tokens_for_tokens(self, amount_in, amount_out_min, path, to, deadline, max_tries=1):
         tx_receipt = None
@@ -422,28 +491,46 @@ class UniswapV2():
         return self.factory_contract.functions.getPair(
             to_checksum(token_address_1), to_checksum(token_address_2)).call()
     
-    def _get_pair_length(self):
-        return self.factory_contract.functions.allPairsLength().call()
+    def _get_pair_length(self, max_tries=1):
+        response = None
+        for _ in range(max_tries):
+            try:
+                response = self.factory_contract.functions.allPairsLength().call()
+                if response is not None:
+                    break
+            except:
+                logging.info(traceback.format_exc())
+        return response
     
-    def _get_pair_index(self, index):
-        return self.factory_contract.functions.allPairs(index).call()
+    def _get_pair_index(self, index, max_tries=1):
+        response = None
+        for _ in range(max_tries):
+            try:
+                response = self.factory_contract.functions.allPairs(index).call()
+                if response is not None:
+                    break
+            except:
+                logging.info(traceback.format_exc())
+        return response
     
-    def _get_all_pairs(self):
+    def _get_all_pairs(self, max_tries=1):
         pairs = []
-        for i in range(self._get_pair_length()):
-            pairs.append(self._get_pair_index(i))
+        for i in range(self._get_pair_length(max_tries=max_tries)):
+            result = self._get_pair_index(i, max_tries=max_tries)
+            if result is not None:
+                pairs.append(result)
         return pairs
     
-    def _get_deposited_pairs(self):
+    def _get_deposited_pairs(self, max_tries=1):
         pairs = []
         logging.info('Looking for deposited liquidity pools...')
-        for i in range(self._get_pair_length()):
-            pair_address = self._get_pair_index(i)
+        for i in range(self._get_pair_length(max_tries=max_tries)):
+            pair_address = self._get_pair_index(i, max_tries=max_tries)
             pair_contract = self._get_pair_contract(pair_address)
             lp_balance = wei2eth(pair_contract.functions.balanceOf(self.address).call())
             if lp_balance > 0.0:
                 logging.info('Found %s with %s LP tokens!' % (pair_address, lp_balance))
-                pairs.append(self._get_pair_index(i))
+                pairs.append(self._get_pair_index(i, max_tries=max_tries))
         return pairs
     
     def _get_pool_info(self, pair_address, value_token=None, max_tries=3):
